@@ -1,9 +1,10 @@
 #include <string.h>
 #include <ctype.h>
-#include <spiflash.h>
+#include <esp_spi_flash.h>
 #include "debug.h"
 #include "crypto.h"
 #include "pairing.h"
+#include "port.h"
 
 #ifndef SPIFLASH_BASE_ADDR
 #define SPIFLASH_BASE_ADDR 0x200000
@@ -29,7 +30,7 @@ const char magic1[] = "HAP";
 
 int homekit_storage_reset() {
     byte blank[sizeof(magic1)];
-    if (!spiflash_write(MAGIC_ADDR, blank, sizeof(blank))) {
+    if (spiflash_write(MAGIC_ADDR, blank, sizeof(blank)) != ESP_OK) {
         ERROR("Failed to reset flash");
         return -1;
     }
@@ -42,19 +43,19 @@ int homekit_storage_init() {
     char magic[sizeof(magic1)];
     memset(magic, 0, sizeof(magic));
 
-    if (!spiflash_read(MAGIC_ADDR, (byte *)magic, sizeof(magic))) {
+    if (spiflash_read(MAGIC_ADDR, (byte *)magic, sizeof(magic)) != ESP_OK) {
         ERROR("Failed to read flash magic");
     }
 
     if (strncmp(magic, magic1, sizeof(magic1))) {
         INFO("Formatting flash at 0x%x", SPIFLASH_BASE_ADDR);
-        if (!spiflash_erase_sector(SPIFLASH_BASE_ADDR)) {
+        if (spiflash_erase_sector(SPIFLASH_BASE_ADDR / SPI_FLASH_SECTOR_SIZE) != ESP_OK) {
             ERROR("Failed to erase flash");
             return -1;
         }
 
         strncpy(magic, magic1, sizeof(magic1));
-        if (!spiflash_write(MAGIC_ADDR, (byte *)magic, sizeof(magic))) {
+        if (spiflash_write(MAGIC_ADDR, (byte *)magic, sizeof(magic)) != ESP_OK) {
             ERROR("Failed to initialize flash");
             return -1;
         }
@@ -67,7 +68,7 @@ int homekit_storage_init() {
 
 
 void homekit_storage_save_accessory_id(const char *accessory_id) {
-    if (!spiflash_write(ACCESSORY_ID_ADDR, (byte *)accessory_id, strlen(accessory_id))) {
+    if (spiflash_write(ACCESSORY_ID_ADDR, (byte *)accessory_id, strlen(accessory_id)) != ESP_OK) {
         ERROR("Failed to write accessory ID to flash");
     }
 }
@@ -80,7 +81,7 @@ static char ishex(unsigned char c) {
 
 char *homekit_storage_load_accessory_id() {
     byte data[ACCESSORY_ID_SIZE+1];
-    if (!spiflash_read(ACCESSORY_ID_ADDR, data, sizeof(data))) {
+    if (spiflash_read(ACCESSORY_ID_ADDR, data, sizeof(data)) != ESP_OK) {
         ERROR("Failed to read accessory ID from flash");
         return NULL;
     }
@@ -108,7 +109,7 @@ void homekit_storage_save_accessory_key(const ed25519_key *key) {
         return;
     }
 
-    if (!spiflash_write(ACCESSORY_KEY_ADDR, key_data, key_data_size)) {
+    if (spiflash_write(ACCESSORY_KEY_ADDR, key_data, key_data_size) != ESP_OK) {
         ERROR("Failed to write accessory key to flash");
         return;
     }
@@ -116,7 +117,7 @@ void homekit_storage_save_accessory_key(const ed25519_key *key) {
 
 ed25519_key *homekit_storage_load_accessory_key() {
     byte key_data[ACCESSORY_KEY_SIZE];
-    if (!spiflash_read(ACCESSORY_KEY_ADDR, key_data, sizeof(key_data))) {
+    if (spiflash_read(ACCESSORY_KEY_ADDR, key_data, sizeof(key_data)) != ESP_OK) {
         ERROR("Failed to read accessory key from flash");
         return NULL;
     }
@@ -155,7 +156,7 @@ bool homekit_storage_can_add_pairing() {
 
 static int compact_data() {
     byte *data = malloc(SPI_FLASH_SECTOR_SIZE);
-    if (!spiflash_read(SPIFLASH_BASE_ADDR, data, SPI_FLASH_SECTOR_SIZE)) {
+    if (spiflash_read(SPIFLASH_BASE_ADDR, data, SPI_FLASH_SECTOR_SIZE) != ESP_OK) {
         free(data);
         ERROR("Failed to compact data: sector data read error");
         return -1;
@@ -187,7 +188,7 @@ static int compact_data() {
         return -1;
     }
 
-    if (!spiflash_write(SPIFLASH_BASE_ADDR, data, PAIRINGS_OFFSET + sizeof(pairing_data_t)*next_pairing_idx)) {
+    if (spiflash_write(SPIFLASH_BASE_ADDR, data, PAIRINGS_OFFSET + sizeof(pairing_data_t)*next_pairing_idx) != ESP_OK) {
         ERROR("Failed to compact data: error writing compacted data");
         return -1;
     }
@@ -242,7 +243,7 @@ int homekit_storage_add_pairing(const char *device_id, const ed25519_key *device
         return -1;
     }
 
-    if (!spiflash_write(PAIRINGS_ADDR + sizeof(data)*next_block_idx, (byte *)&data, sizeof(data))) {
+    if (spiflash_write(PAIRINGS_ADDR + sizeof(data)*next_block_idx, (byte *)&data, sizeof(data)) != ESP_OK) {
         ERROR("Failed to write pairing info to flash");
         return -1;
     }
@@ -276,7 +277,7 @@ int homekit_storage_update_pairing(const char *device_id, byte permissions) {
             }
 
             memset(&data, 0, sizeof(data));
-            if (!spiflash_write(PAIRINGS_ADDR + sizeof(data)*i, (byte *)&data, sizeof(data))) {
+            if (spiflash_write(PAIRINGS_ADDR + sizeof(data)*i, (byte *)&data, sizeof(data)) != ESP_OK) {
                 ERROR("Failed to update pairing: error erasing old record");
                 return -2;
             }
@@ -297,7 +298,7 @@ int homekit_storage_remove_pairing(const char *device_id) {
 
         if (!strncmp(data.device_id, device_id, sizeof(data.device_id))) {
             memset(&data, 0, sizeof(data));
-            if (!spiflash_write(PAIRINGS_ADDR + sizeof(data)*i, (byte *)&data, sizeof(data))) {
+            if (spiflash_write(PAIRINGS_ADDR + sizeof(data)*i, (byte *)&data, sizeof(data)) != ESP_OK) {
                 ERROR("Failed to remove pairing from flash");
                 return -2;
             }
