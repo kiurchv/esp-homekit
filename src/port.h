@@ -3,6 +3,8 @@
 uint32_t homekit_random();
 void homekit_random_fill(uint8_t *data, size_t size);
 
+void homekit_system_restart();
+
 #ifdef ESP_IDF
 #define spiflash_read spi_flash_read
 #define spiflash_write spi_flash_write
