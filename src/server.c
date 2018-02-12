@@ -21,7 +21,7 @@
 #error "Unknown target platform"
 #endif
 
-#include "mdnsresponder.h"
+#include <mdns.h>
 #include <http-parser/http_parser.h>
 #include <cJSON.h>
 
@@ -3082,10 +3082,11 @@ void homekit_setup_mdns(homekit_server_t *server) {
         return;
     }
 
-    char txt_rec[128];
-    txt_rec[0] = 0;
+    mdns_hostname_set(name->value.string_value);
+    mdns_instance_name_set(name->value.string_value);
+    mdns_service_add(name->value.string_value, "_hap", "_tcp", PORT, NULL, 0);
 
-    void add_txt(const char *format, ...) {
+    void add_txt(const char *key, const char *format, ...) {
         va_list arg_ptr;
         va_start(arg_ptr, format);
 
@@ -3095,35 +3096,32 @@ void homekit_setup_mdns(homekit_server_t *server) {
         va_end(arg_ptr);
 
         if (buffer_len && buffer_len < sizeof(buffer)-1)
-            mdns_TXT_append(txt_rec, sizeof(txt_rec), buffer, buffer_len);
+            mdns_service_txt_item_set("_hap", "_tcp", key, buffer);
     }
 
     // accessory model name (required)
-    add_txt("md=%s", model->value.string_value);
+    add_txt("md", "%s", model->value.string_value);
     // protocol version (required)
-    add_txt("pv=1.0");
+    add_txt("pv", "1.0");
     // device ID (required)
     // should be in format XX:XX:XX:XX:XX:XX, otherwise devices will ignore it
-    add_txt("id=%s", server->accessory_id);
+    add_txt("id", "%s", server->accessory_id);
     // current configuration number (required)
-    add_txt("c#=%d", accessory->config_number);
+    add_txt("c#", "%d", accessory->config_number);
     // current state number (required)
-    add_txt("s#=1");
+    add_txt("s#", "1");
     // feature flags (required if non-zero)
     //   bit 0 - supports HAP pairing. required for all HomeKit accessories
     //   bits 1-7 - reserved
-    add_txt("ff=0");
+    add_txt("ff", "0");
     // status flags
     //   bit 0 - not paired
     //   bit 1 - not configured to join WiFi
     //   bit 2 - problem detected on accessory
     //   bits 3-7 - reserved
-    add_txt("sf=%d", (server->paired) ? 0 : 1);
+    add_txt("sf", "%d", (server->paired) ? 0 : 1);
     // accessory category identifier
-    add_txt("ci=%d", accessory->category);
-
-    mdns_clear();
-    mdns_add_facility(name->value.string_value, "_hap", txt_rec, mdns_TCP, PORT, 60);
+    add_txt("ci", "%d", accessory->category);
 }
 
 char *homekit_accessory_id_generate() {
