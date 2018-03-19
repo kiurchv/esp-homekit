@@ -9,7 +9,7 @@ uint32_t homekit_random() {
 }
 
 void homekit_random_fill(uint8_t *data, size_t size) {
-    hwrand_fill(buf, sizeof(buf));
+    hwrand_fill(data, size);
 }
 
 void homekit_system_restart() {
